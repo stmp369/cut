@@ -88,6 +88,25 @@
     padding:4px 12px; border-radius:20px; font-family:'IBM Plex Mono',monospace; letter-spacing:0.02em;
   }
 
+  /* ---------- Top-level tabs (Home / Dashboard) ---------- */
+  .main-tabs{ display:flex; gap:4px; margin-bottom:16px; background:var(--bg-card); border:1px solid var(--line); padding:4px; border-radius:12px; box-shadow:0 1px 3px rgba(20,30,45,0.05); }
+  .main-tab{
+    flex:1; padding:11px; border-radius:9px; text-align:center; cursor:pointer;
+    font-family:'Barlow Condensed',sans-serif; font-weight:700; text-transform:uppercase; letter-spacing:0.03em;
+    font-size:14px; color:var(--ink-dim); display:flex; align-items:center; justify-content:center; gap:7px;
+    transition:background .15s, color .15s, box-shadow .15s;
+  }
+  .main-tab svg{ width:16px; height:16px; }
+  .main-tab.active{ background:var(--accent); color:#fff; box-shadow:0 3px 10px rgba(20,30,45,0.18); }
+
+  /* ---------- Dashboard ---------- */
+  .dash-summary-grid{ display:flex; gap:10px; margin-bottom:14px; }
+  .dash-stat{ flex:1; background:var(--bg-card); border:1px solid var(--line); border-radius:var(--radius); padding:14px 10px; text-align:center; box-shadow:0 1px 3px rgba(20,30,45,0.05); }
+  .dash-stat-n{ font-family:'IBM Plex Mono',monospace; font-weight:600; font-size:24px; color:var(--ink); }
+  .dash-stat-l{ font-family:'Barlow Condensed',sans-serif; font-weight:700; text-transform:uppercase; letter-spacing:0.03em; font-size:11px; color:var(--ink-faint); margin-top:2px; }
+  .dash-stat.pending .dash-stat-n{ color:var(--pending); }
+  .dash-stat.done .dash-stat-n{ color:var(--done); }
+
   /* ---------- Home / style list ---------- */
   .view-tabs{ display:flex; gap:4px; margin-bottom:16px; background:var(--line-soft); padding:4px; border-radius:11px; }
   .search-bar{
@@ -264,6 +283,8 @@
   .icon-btn:active{ opacity:0.8; }
   .icon-btn.danger{ color:var(--bad); border-color:var(--bad-soft); background:var(--bad-soft); }
   .icon-btn.confirm{ color:var(--done); border-color:var(--done-soft); background:var(--done-soft); }
+  .order-grid tbody tr.log-date-start td{ border-top:2px solid var(--accent); padding-top:12px; }
+  .order-grid tbody tr.log-date-start td:first-child{ font-weight:700; color:var(--ink); }
   .log-edit-row td{ padding:5px 3px; }
   .log-edit-row input, .log-edit-row select{
     width:100%; min-height:36px; padding:6px 5px; border-radius:8px; border:1.4px solid var(--line);
@@ -416,7 +437,8 @@ let styles = [];      // [{id, name, parts:[...], colors:[...], sizes:[...], ord
 let received = [];    // [{id, styleId, part, color, size, qty, createdAt}]
 
 let homeTab = 'pending';   // 'pending' | 'done'
-let view = 'home';         // 'home' | 'colors' | 'detail'
+let view = 'home';         // 'home' | 'dashboard' | 'colors' | 'detail'
+let receivedPopupData = null; // details shown in the confirmation popup after a Received entry is saved
 let menuOpen = false;      // side hamburger menu
 let activeStyleId = null;
 let activeColor = null;
@@ -588,12 +610,35 @@ function renderApp(){
   if(!isConfigured()){ main.innerHTML = ''; return; }
   if(view==='detail' && activeStyleId && activeColor){ main.innerHTML = detailHTML(); bindDetail(); }
   else if(view==='colors' && activeStyleId){ main.innerHTML = colorsHTML(); bindColors(); }
-  else{ main.innerHTML = homeHTML(); bindHome(); }
+  else if(view==='dashboard'){ main.innerHTML = mainTabsHTML() + dashboardHTML(); bindMainTabs(); bindDashboard(); }
+  else{ main.innerHTML = mainTabsHTML() + homeHTML(); bindMainTabs(); bindHome(); }
   renderWizard();
   renderMenu();
   renderSettings();
   renderEditPicker();
   renderEditStyle();
+  renderReceivedPopup();
+}
+
+/* ---------- Top-level tabs (Home / Dashboard) ---------- */
+function mainTabsHTML(){
+  return `
+    <div class="main-tabs">
+      <div class="main-tab ${view==='home'?'active':''}" data-maintab="home">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+        Home
+      </div>
+      <div class="main-tab ${view==='dashboard'?'active':''}" data-maintab="dashboard">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>
+        Dashboard
+      </div>
+    </div>
+  `;
+}
+function bindMainTabs(){
+  document.querySelectorAll('[data-maintab]').forEach(t=>{
+    t.onclick = ()=>{ view = t.dataset.maintab; renderApp(); };
+  });
 }
 
 /* ---------- Home ---------- */
@@ -626,10 +671,7 @@ function homeHTML(){
         </div>
         <div class="side">
           <span class="badge ${done?'done':'pending'}">${done?'Done':'Pending'}</span>
-          <div style="display:flex; gap:6px;">
-            <button type="button" class="icon-btn danger" data-deletestyle="${s.id}" title="Delete Style"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
-            <button class="view-full-btn" data-open="${s.id}">View Full</button>
-          </div>
+          <button class="view-full-btn" data-open="${s.id}">View Full</button>
         </div>
       </div>`;
     }).join('')}
@@ -668,9 +710,6 @@ function bindHome(){
       renderApp();
     };
   });
-  document.querySelectorAll('[data-deletestyle]').forEach(btn=>{
-    btn.onclick = (e)=>{ e.stopPropagation(); deleteStyle(btn.dataset.deletestyle, btn); };
-  });
   const searchInput = document.getElementById('styleSearchInput');
   if(searchInput){
     searchInput.oninput = ()=>{
@@ -681,6 +720,90 @@ function bindHome(){
       if(freshInput){ freshInput.focus(); freshInput.setSelectionRange(pos,pos); }
     };
   }
+}
+
+/* ---------- Dashboard ---------- */
+function dashboardHTML(){
+  const total = styles.length;
+  const pendingList = styles.filter(s=> !isStyleDone(s));
+  const doneList = styles.filter(s=> isStyleDone(s));
+  const todayStr = new Date().toISOString().slice(0,10);
+  const todayEntries = received
+    .filter(r=> r.date===todayStr)
+    .slice()
+    .sort((a,b)=> (b.createdAt?.seconds||0)-(a.createdAt?.seconds||0));
+
+  const todayRows = todayEntries.map(r=>{
+    const s = styles.find(x=>x.id===r.styleId);
+    return `<tr><td>${s ? s.name : '—'}</td><td>${r.color||'—'}</td><td>${r.size||'—'}</td><td>${r.part||'—'}</td><td class="num">${r.qty}</td></tr>`;
+  }).join('');
+
+  const chartRows = styles.map(s=>{
+    const pct = styleProgress(s);
+    const done = isStyleDone(s);
+    return `
+    <div style="margin-bottom:14px;">
+      <div style="display:flex; justify-content:space-between; align-items:baseline; font-size:13.5px; margin-bottom:5px;">
+        <span style="font-family:'Barlow Condensed',sans-serif; font-weight:700; text-transform:uppercase; color:var(--ink);">${s.name}</span>
+        <span class="num" style="color:${done?'var(--done)':'var(--ink-dim)'};">${pct}%</span>
+      </div>
+      <div class="progress-track"><div class="progress-fill ${done?'done':''}" style="width:${pct}%;"></div></div>
+    </div>`;
+  }).join('');
+
+  const listRows = styles.map(s=>{
+    const done = isStyleDone(s);
+    const pct = styleProgress(s);
+    return `
+    <div class="card style-card ${done?'card-done':'card-pending'}" data-open="${s.id}">
+      <div class="info">
+        <div class="name">${s.name}</div>
+        <div class="meta">${(s.parts||[]).length} parts · ${(s.colors||[]).length} colors · ${(s.sizes||[]).length} sizes · Order ${totalOrdered(s)}</div>
+        <div class="progress-track"><div class="progress-fill ${done?'done':''}" style="width:${pct}%;"></div></div>
+      </div>
+      <div class="side">
+        <span class="badge ${done?'done':'pending'}">${done?'Done':'Pending'}</span>
+      </div>
+    </div>`;
+  }).join('');
+
+  return `
+    <div class="dash-summary-grid">
+      <div class="dash-stat"><div class="dash-stat-n">${total}</div><div class="dash-stat-l">Total Style</div></div>
+      <div class="dash-stat pending"><div class="dash-stat-n">${pendingList.length}</div><div class="dash-stat-l">Pending</div></div>
+      <div class="dash-stat done"><div class="dash-stat-n">${doneList.length}</div><div class="dash-stat-l">Complete</div></div>
+    </div>
+
+    <div class="card" style="padding:14px 16px; margin-bottom:16px;">
+      <div class="section-title">আজকের রিসিভ <span class="n">${todayEntries.length}</span></div>
+      ${todayEntries.length ? `
+      <table class="order-grid">
+        <thead><tr><th style="text-align:left;">Style</th><th style="text-align:left;">Color</th><th style="text-align:left;">Size</th><th style="text-align:left;">Part</th><th>Qty</th></tr></thead>
+        <tbody>${todayRows}</tbody>
+      </table>` : `<div class="empty-state" style="padding:22px 0;">আজ এখনো কিছু Receive হয়নি</div>`}
+    </div>
+
+    <div class="card" style="padding:14px 16px; margin-bottom:16px;">
+      <div class="section-title">PO Wise Progress</div>
+      ${chartRows || `<div class="empty-state" style="padding:22px 0;">কোনো স্টাইল নেই</div>`}
+    </div>
+
+    <div class="section-title">সব স্টাইল <span class="n">${total}</span></div>
+    ${listRows || `<div class="empty-state">কোনো স্টাইল নেই। মেনু থেকে নতুন স্টাইল যোগ করুন।</div>`}
+  `;
+}
+function bindDashboard(){
+  document.querySelectorAll('[data-open]').forEach(el=>{
+    el.onclick = (e)=>{
+      e.stopPropagation();
+      activeStyleId = el.dataset.open;
+      activeColor = null;
+      colorTab = null;
+      sizeTab = null;
+      view = 'colors';
+      renderApp();
+    };
+  });
 }
 
 document.getElementById('menuBtn').onclick = ()=>{ menuOpen = true; renderApp(); };
@@ -703,6 +826,10 @@ function renderMenu(){
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
         Home
       </button>
+      <button class="menu-item" id="menuDashboardBtn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>
+        Dashboard
+      </button>
       <button class="menu-item" id="menuAddStyleBtn">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
         Add Style
@@ -719,6 +846,9 @@ function renderMenu(){
   `;
   document.getElementById('menuHomeBtn').onclick = ()=>{
     menuOpen=false; view='home'; activeStyleId=null; activeColor=null; colorTab=null; sizeTab=null; renderApp();
+  };
+  document.getElementById('menuDashboardBtn').onclick = ()=>{
+    menuOpen=false; view='dashboard'; activeStyleId=null; activeColor=null; colorTab=null; sizeTab=null; renderApp();
   };
   document.getElementById('menuAddStyleBtn').onclick = ()=>{
     menuOpen=false;
@@ -811,6 +941,39 @@ function bindSettings(){
   });
 }
 
+/* ---------- Received confirmation popup ---------- */
+function renderReceivedPopup(){
+  let ov = document.getElementById('receivedPopupOverlay');
+  if(!receivedPopupData){ if(ov) ov.remove(); return; }
+  if(!ov){
+    ov = document.createElement('div');
+    ov.id = 'receivedPopupOverlay';
+    ov.className = 'overlay center';
+    document.body.appendChild(ov);
+    ov.onclick = (e)=>{ if(e.target===ov){ receivedPopupData = null; renderApp(); } };
+  }
+  const d = receivedPopupData;
+  ov.innerHTML = `
+    <div class="sheet" style="max-width:360px; text-align:center;">
+      <div style="width:54px;height:54px;border-radius:50%;background:var(--done-soft);display:flex;align-items:center;justify-content:center;margin:0 auto 14px;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="var(--done)" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" style="width:26px;height:26px;"><polyline points="20 6 9 17 4 12"/></svg>
+      </div>
+      <div style="font-family:'Barlow Condensed',sans-serif; font-weight:800; font-size:19px; text-transform:uppercase; color:var(--ink); margin-bottom:16px;">Entry সেভ হয়েছে</div>
+      <table class="order-grid" style="margin-bottom:18px;">
+        <tbody>
+          <tr><td style="text-align:left; font-weight:700; color:var(--ink-dim);">Style</td><td class="num" style="text-align:right;">${d.styleName}</td></tr>
+          <tr><td style="text-align:left; font-weight:700; color:var(--ink-dim);">Color</td><td class="num" style="text-align:right;">${d.color}</td></tr>
+          <tr><td style="text-align:left; font-weight:700; color:var(--ink-dim);">Size</td><td class="num" style="text-align:right;">${d.size}</td></tr>
+          <tr><td style="text-align:left; font-weight:700; color:var(--ink-dim);">Part</td><td class="num" style="text-align:right;">${d.part}</td></tr>
+          <tr><td style="text-align:left; font-weight:700; color:var(--ink-dim);">Quantity</td><td class="num" style="text-align:right; font-weight:700; color:var(--done);">${d.qty}</td></tr>
+        </tbody>
+      </table>
+      <button type="button" class="primary-btn" id="receivedPopupCloseBtn" style="margin-top:0;">ঠিক আছে</button>
+    </div>
+  `;
+  document.getElementById('receivedPopupCloseBtn').onclick = ()=>{ receivedPopupData = null; renderApp(); };
+}
+
 /* ---------- Color list (per style) ---------- */
 function colorsHTML(){
   const s = styles.find(x=>x.id===activeStyleId);
@@ -843,12 +1006,18 @@ function colorsHTML(){
     .filter(r=> r.styleId===s.id && r.color===c)
     .slice()
     .sort((a,b)=> (b.date||'').localeCompare(a.date||'') || (b.createdAt?.seconds||0)-(a.createdAt?.seconds||0)) : [];
+  let lastLogDate = null;
+  let logRowIdx = -1;
   const logRows = logEntries.map(r=>{
+    logRowIdx++;
+    const isNewGroup = r.date !== lastLogDate;
+    lastLogDate = r.date;
+    const groupClass = (isNewGroup && logRowIdx>0) ? 'log-date-start' : '';
     if(r.id === editingLogId){
       const sizeOptsSel = (s.sizes||[]).map(sz=>`<option value="${sz}" ${sz===r.size?'selected':''}>${sz}</option>`).join('');
       const partOptsSel = (s.parts||[]).map(p=>`<option value="${p}" ${p===r.part?'selected':''}>${p}</option>`).join('');
       return `
-      <tr class="log-edit-row" data-logrow="${r.id}">
+      <tr class="log-edit-row ${groupClass}" data-logrow="${r.id}">
         <td><input type="date" id="logEditDate-${r.id}" value="${r.date||''}" /></td>
         <td><select id="logEditPart-${r.id}">${partOptsSel}</select></td>
         <td><select id="logEditSize-${r.id}">${sizeOptsSel}</select></td>
@@ -860,8 +1029,8 @@ function colorsHTML(){
       </tr>`;
     }
     return `
-    <tr>
-      <td>${r.date||'—'}</td><td>${r.part}</td><td>${r.size}</td><td class="num">${r.qty}</td>
+    <tr class="${groupClass}">
+      <td>${isNewGroup ? (r.date||'—') : ''}</td><td>${r.part}</td><td>${r.size}</td><td class="num">${r.qty}</td>
       <td class="log-actions">
         <button type="button" class="icon-btn" data-logedit="${r.id}" title="Edit"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg></button>
         <button type="button" class="icon-btn danger" data-logdelete="${r.id}" title="Delete"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
@@ -976,6 +1145,7 @@ function bindColors(){
         createdAt: firebase.firestore.FieldValue.serverTimestamp()
       });
       showToast('Entry হয়েছে');
+      receivedPopupData = { styleName: s.name, color, size, part, qty, date };
       renderApp();
     }catch(err){
       console.error(err); showToast('Save failed');
