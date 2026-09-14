@@ -266,10 +266,14 @@
     font-family:'Barlow Condensed',sans-serif; font-weight:700; text-transform:uppercase; color:var(--ink); white-space:nowrap; padding-left:10px;
   }
   .order-grid td:not(:first-child){ text-align:center; }
-  .table-scroll{ overflow-x:auto; -webkit-overflow-scrolling:touch; margin-top:6px; }
-  .today-receipt-table{ min-width:480px; margin-top:0; }
-  .today-receipt-table th, .today-receipt-table td{ white-space:nowrap; }
-  .today-receipt-table td:nth-child(2){ max-width:150px; overflow:hidden; text-overflow:ellipsis; }
+  .today-style-group{ margin-bottom:14px; }
+  .today-style-group:last-child{ margin-bottom:0; }
+  .today-style-head{
+    font-family:'Barlow Condensed',sans-serif; font-weight:800; text-transform:uppercase; letter-spacing:0.03em;
+    font-size:14px; color:var(--accent); background:var(--accent-soft); padding:7px 10px; border-radius:8px 8px 0 0;
+  }
+  .today-receipt-table{ margin-top:0; border-radius:0 0 8px 8px; overflow:hidden; }
+  .today-receipt-table td:first-child{ font-weight:400; text-transform:none; white-space:normal; word-break:break-word; }
   .order-grid input{
     width:100%; min-height:38px; padding:9px 6px; text-align:center; border-radius:8px; border:1.4px solid var(--line);
     background:var(--bg); font-family:'IBM Plex Mono',monospace; font-size:13.5px;
@@ -737,9 +741,24 @@ function dashboardHTML(){
     .slice()
     .sort((a,b)=> (b.createdAt?.seconds||0)-(a.createdAt?.seconds||0));
 
-  const todayRows = todayEntries.map(r=>{
+  const todayGroups = {};
+  todayEntries.forEach(r=>{
     const s = styles.find(x=>x.id===r.styleId);
-    return `<tr><td>${s ? s.name : '—'}</td><td>${r.color||'—'}</td><td>${r.size||'—'}</td><td>${r.part||'—'}</td><td class="num">${r.qty}</td></tr>`;
+    const name = s ? s.name : '—';
+    (todayGroups[name] = todayGroups[name] || []).push(r);
+  });
+  const todayGroupsHTML = Object.keys(todayGroups).map(name=>{
+    const rows = todayGroups[name].map(r=>
+      `<tr><td>${r.color||'—'}</td><td>${r.size||'—'}</td><td>${r.part||'—'}</td><td class="num">${r.qty}</td></tr>`
+    ).join('');
+    return `
+    <div class="today-style-group">
+      <div class="today-style-head">${name}</div>
+      <table class="order-grid today-receipt-table">
+        <thead><tr><th style="text-align:left;">Color</th><th style="text-align:left;">Size</th><th style="text-align:left;">Part</th><th>Qty</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
   }).join('');
 
   const chartRows = styles.map(s=>{
@@ -780,13 +799,7 @@ function dashboardHTML(){
 
     <div class="card" style="padding:14px 16px; margin-bottom:16px;">
       <div class="section-title">আজকের রিসিভ <span class="n">${todayEntries.length}</span></div>
-      ${todayEntries.length ? `
-      <div class="table-scroll">
-      <table class="order-grid today-receipt-table">
-        <thead><tr><th style="text-align:left;">Style</th><th style="text-align:left;">Color</th><th style="text-align:left;">Size</th><th style="text-align:left;">Part</th><th>Qty</th></tr></thead>
-        <tbody>${todayRows}</tbody>
-      </table>
-      </div>` : `<div class="empty-state" style="padding:22px 0;">আজ এখনো কিছু Receive হয়নি</div>`}
+      ${todayEntries.length ? todayGroupsHTML : `<div class="empty-state" style="padding:22px 0;">আজ এখনো কিছু Receive হয়নি</div>`}
     </div>
 
     <div class="card" style="padding:14px 16px; margin-bottom:16px;">
