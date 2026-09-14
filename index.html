@@ -266,6 +266,10 @@
     font-family:'Barlow Condensed',sans-serif; font-weight:700; text-transform:uppercase; color:var(--ink); white-space:nowrap; padding-left:10px;
   }
   .order-grid td:not(:first-child){ text-align:center; }
+  .table-scroll{ overflow-x:auto; -webkit-overflow-scrolling:touch; margin-top:6px; }
+  .today-receipt-table{ min-width:480px; margin-top:0; }
+  .today-receipt-table th, .today-receipt-table td{ white-space:nowrap; }
+  .today-receipt-table td:nth-child(2){ max-width:150px; overflow:hidden; text-overflow:ellipsis; }
   .order-grid input{
     width:100%; min-height:38px; padding:9px 6px; text-align:center; border-radius:8px; border:1.4px solid var(--line);
     background:var(--bg); font-family:'IBM Plex Mono',monospace; font-size:13.5px;
@@ -777,10 +781,12 @@ function dashboardHTML(){
     <div class="card" style="padding:14px 16px; margin-bottom:16px;">
       <div class="section-title">আজকের রিসিভ <span class="n">${todayEntries.length}</span></div>
       ${todayEntries.length ? `
-      <table class="order-grid">
+      <div class="table-scroll">
+      <table class="order-grid today-receipt-table">
         <thead><tr><th style="text-align:left;">Style</th><th style="text-align:left;">Color</th><th style="text-align:left;">Size</th><th style="text-align:left;">Part</th><th>Qty</th></tr></thead>
         <tbody>${todayRows}</tbody>
-      </table>` : `<div class="empty-state" style="padding:22px 0;">আজ এখনো কিছু Receive হয়নি</div>`}
+      </table>
+      </div>` : `<div class="empty-state" style="padding:22px 0;">আজ এখনো কিছু Receive হয়নি</div>`}
     </div>
 
     <div class="card" style="padding:14px 16px; margin-bottom:16px;">
